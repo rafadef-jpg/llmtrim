@@ -66,6 +66,7 @@ tokio = { version = "1.52", features = [
   "net",
   "io-util",
   "signal",
+  "sync",
   "time",
 ], optional = true }
 # The MITM interceptor (`serve`).
@@ -87,8 +88,16 @@ hyper-http-proxy = { version = "1.1", default-features = false, features = [
 hyper-util = { version = "0.1", default-features = false, features = [
   "client-legacy",
   "http2",
+  "tokio",
 ], optional = true }
 http-body-util = { version = "0.1", optional = true }
+# The Codex localhost gateway's HTTP server (`codex_gateway::socket`). Already in the tree as
+# hudsucker's own dependency, so this adds no package and no version to the lock — it only makes
+# the server side of hyper reachable directly, instead of hand-rolling request framing.
+hyper = { version = "1", default-features = false, features = [
+  "server",
+  "http1",
+], optional = true }
 bytes = { version = "1", optional = true }
 llm_providers = { version = "0.14", optional = true }
 # Subscription reroute (`sub` = codex|kimi): OAuth (PKCE/device) + provider request/response
@@ -162,6 +171,7 @@ live = ["dep:async-openai", "dep:reqwest", "dep:tokio"]
 breakdown = ["dep:ratatui", "dep:crossterm"]
 intercept = [
   "dep:hudsucker",
+  "dep:hyper",
   "dep:tokio",
   "dep:http-body-util",
   "dep:bytes",

@@ -547,6 +547,7 @@ pub(crate) const RUNTIME_ONLY_KEYS: &[&str] = &[
     "first_arrival_recall_max_entries",
     "first_arrival_recall_max_bytes",
     "first_arrival_recall_max_entry_bytes",
+    "toolout_passthrough",
 ];
 
 /// The resolved config-file path (`LLMTRIM_CONFIG`, else `$XDG_CONFIG_HOME`/`$HOME/.config` +
@@ -977,6 +978,10 @@ pub struct RuntimeConfig {
     pub first_arrival_recall_max_bytes: Option<usize>,
     /// Recall-store per-entry byte cap; unset uses 8 MiB.
     pub first_arrival_recall_max_entry_bytes: Option<usize>,
+    /// Command globs that skip tool-output compression for matching tool results.
+    /// Env `LLMTRIM_TOOL_OUTPUT` (`passthrough` = all commands, else comma-separated
+    /// globs) replaces the file `toolout_passthrough` array.
+    pub toolout_passthrough: Vec<String>,
 }
 
 impl RuntimeConfig {
@@ -1095,6 +1100,7 @@ impl RuntimeConfig {
                 fint("first_arrival_recall_max_entry_bytes").and_then(|n| usize::try_from(n).ok())
             })
             .filter(|n| *n > 0),
+            toolout_passthrough: resolve_toolout_passthrough(&env, file),
         }
     }
 }
@@ -1669,6 +1675,50 @@ fn resolve_str_list(
     out.sort();
     out.dedup();
     out
+}
+
+/// Env `LLMTRIM_TOOL_OUTPUT` replaces file `toolout_passthrough`. `passthrough` (any
+/// case) becomes the match-all glob `*`; otherwise comma-separated command globs.
+fn resolve_toolout_passthrough(
+    env: impl Fn(&str) -> Option<String>,
+    file: Option<&toml::Value>,
+) -> Vec<String> {
+    if let Some(raw) = env("LLMTRIM_TOOL_OUTPUT").filter(|s| !s.trim().is_empty()) {
+        return parse_toolout_passthrough(&raw);
+    }
+    file.and_then(|v| v.get("toolout_passthrough"))
+        .map(parse_toolout_passthrough_toml)
+        .unwrap_or_default()
+}
+
+fn parse_toolout_passthrough(raw: &str) -> Vec<String> {
+    let t = raw.trim();
+    if t.eq_ignore_ascii_case("passthrough") {
+        return vec!["*".to_string()];
+    }
+    t.split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            if s.eq_ignore_ascii_case("passthrough") {
+                "*".to_string()
+            } else {
+                s.to_string()
+            }
+        })
+        .collect()
+}
+
+fn parse_toolout_passthrough_toml(v: &toml::Value) -> Vec<String> {
+    match v {
+        toml::Value::String(s) => parse_toolout_passthrough(s),
+        toml::Value::Array(arr) => arr
+            .iter()
+            .filter_map(toml::Value::as_str)
+            .flat_map(parse_toolout_passthrough)
+            .collect(),
+        _ => Vec::new(),
+    }
 }
 
 /// The provider/host exclusion lists. Kept as its own type rather than fields on
@@ -3239,6 +3289,7 @@ active = \"off\"
             "extra_hosts = [\"llm.acme.com\"]",
             "no_update_check = true",
             "db_path = \"/tmp/db\"\ncapture_max_mb = 100\nretention_days = 7",
+            "toolout_passthrough = [\"*gpt.sh*\"]",
         ] {
             let c = DenseConfig::from_toml_value(toml::from_str(src).unwrap()).unwrap();
             assert!(c.auto, "runtime-only config `{src}` must keep auto routing");
@@ -3252,5 +3303,27 @@ active = \"off\"
             !c.auto && !c.hygiene,
             "a compression key opts into explicit flags"
         );
+    }
+
+    #[test]
+    fn toolout_passthrough_env_and_file() {
+        assert_eq!(
+            resolve_env(&[("LLMTRIM_TOOL_OUTPUT", "passthrough")], "").toolout_passthrough,
+            vec!["*"]
+        );
+        assert_eq!(
+            resolve_file("toolout_passthrough = [\"bash ~/.claude/bin/gpt.sh *\"]")
+                .toolout_passthrough,
+            vec!["bash ~/.claude/bin/gpt.sh *"]
+        );
+        assert_eq!(
+            resolve_file("toolout_passthrough = \"passthrough\"").toolout_passthrough,
+            vec!["*"]
+        );
+        let c = resolve_env(
+            &[("LLMTRIM_TOOL_OUTPUT", "*gpt.sh*")],
+            "toolout_passthrough = [\"ignored\"]",
+        );
+        assert_eq!(c.toolout_passthrough, vec!["*gpt.sh*"]);
     }
 }

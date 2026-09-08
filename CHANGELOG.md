@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.4] - 2026-09-08
+
 ### Added
 
 - **Tool-output passthrough for machine couriers.** Long tool results are still
@@ -1720,7 +1722,8 @@ bill, never a broken call.
   (6 targets with SLSA build provenance), CI on Linux/macOS/Windows with secret
   scanning, license compliance, and MSRV gates.
 
-[Unreleased]: https://github.com/fkiene/llmtrim/compare/v0.13.3...HEAD
+[Unreleased]: https://github.com/fkiene/llmtrim/compare/v0.13.4...HEAD
+[0.13.4]: https://github.com/fkiene/llmtrim/compare/v0.13.3...v0.13.4
 [0.13.3]: https://github.com/fkiene/llmtrim/compare/v0.13.2...v0.13.3
 [0.13.2]: https://github.com/fkiene/llmtrim/compare/v0.13.1...v0.13.2
 [0.13.1]: https://github.com/fkiene/llmtrim/compare/v0.13.0...v0.13.1
